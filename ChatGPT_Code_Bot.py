@@ -3,18 +3,19 @@ import email
 import re
 import requests
 import time
+import os
+from dotenv import load_dotenv
+from email.header import decode_header
 
-# Email credentials
+# Load environment variables from .env file
+load_dotenv()
+
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_HOST = "imap.gmail.com"
-EMAIL_USER = "scholarshipzta@gmail.com"
-EMAIL_PASSWORD = "psmb dyks zjbq cqmd"  # Using App password
-
-# GroupMe credentials
-GROUPME_BOT_ID = "91258b4c64fa980bae34d251d6"
+GROUPME_BOT_ID = os.getenv("GROUPME_BOT_ID")
 GROUPME_API_URL = "https://api.groupme.com/v3/bots/post"
 
-# Allowed senders (to capture codes from both "noreply" and "ChatGPT")
-ALLOWED_SENDERS = ["noreply", "ChatGPT"]
 
 def get_chatgpt_code():
     try:
@@ -40,23 +41,26 @@ def get_chatgpt_code():
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
-                    subject = msg["Subject"]
-                    sender = msg["From"]
+                    raw_subject = msg["Subject"]
+                    decoded_subject, encoding = decode_header(raw_subject)[0]
+                    if isinstance(decoded_subject, bytes):
+                        subject = decoded_subject.decode(encoding or "utf-8")
+                    else:
+                        subject = decoded_subject
 
-                    print(f"📝 Email from: {sender} | Subject: {subject}")
+                    print(f"📝 Processing email with decoded subject: {subject}")
 
-                    # Check if sender matches allowed senders
-                    if any(allowed in sender for allowed in ALLOWED_SENDERS):
-                        match = re.search(r"Your ChatGPT code is (\d{6})", subject)
-                        if match:
-                            code = match.group(1)
-                            print(f"✅ Found verification code: {code}")
+                    # Extract the verification code from the subject line
+                    match = re.search(r"Your ChatGPT code is (\d{6})", subject)
+                    if match:
+                        code = match.group(1)
+                        print(f"✅ Found verification code: {code}")
 
-                            # Mark the email as read
-                            mail.store(latest_email_id, '+FLAGS', '\\Seen')
+                        # Mark the email as read
+                        mail.store(latest_email_id, '+FLAGS', '\\Seen')
 
-                            mail.logout()
-                            return code
+                        mail.logout()
+                        return code
 
         mail.logout()
         return None
@@ -67,6 +71,7 @@ def get_chatgpt_code():
         print(f"❌ Error checking email: {e}")
 
     return None
+
 
 def send_to_groupme(code):
     try:
