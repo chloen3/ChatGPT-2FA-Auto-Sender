@@ -1,21 +1,21 @@
+from flask import Flask
+from dotenv import load_dotenv
+import os
 import imaplib
 import email
 import re
 import requests
-import time
-import os
-from dotenv import load_dotenv
 from email.header import decode_header
 
-# Load environment variables from .env file
 load_dotenv()
+
+app = Flask(__name__)
 
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_HOST = "imap.gmail.com"
 GROUPME_BOT_ID = os.getenv("GROUPME_BOT_ID")
 GROUPME_API_URL = "https://api.groupme.com/v3/bots/post"
-
 
 def get_chatgpt_code():
     try:
@@ -35,7 +35,7 @@ def get_chatgpt_code():
             mail.logout()
             return None
 
-        for latest_email_id in reversed(email_ids):  # Process the latest emails first
+        for latest_email_id in reversed(email_ids):
             result, msg_data = mail.fetch(latest_email_id, "(RFC822)")
 
             for response_part in msg_data:
@@ -50,15 +50,11 @@ def get_chatgpt_code():
 
                     print(f"📝 Processing email with decoded subject: {subject}")
 
-                    # Extract the verification code from the subject line
                     match = re.search(r"Your ChatGPT code is (\d{6})", subject)
                     if match:
                         code = match.group(1)
                         print(f"✅ Found verification code: {code}")
-
-                        # Mark the email as read
                         mail.store(latest_email_id, '+FLAGS', '\\Seen')
-
                         mail.logout()
                         return code
 
@@ -71,7 +67,6 @@ def get_chatgpt_code():
         print(f"❌ Error checking email: {e}")
 
     return None
-
 
 def send_to_groupme(code):
     try:
@@ -89,10 +84,14 @@ def send_to_groupme(code):
     except Exception as e:
         print(f"❌ Error sending message to GroupMe: {e}")
 
-# Main loop to check email every 30 seconds
-while True:
+@app.route('/')
+def run_bot():
     code = get_chatgpt_code()
     if code:
-        print(f"🚀 Found ChatGPT Code: {code}")
         send_to_groupme(code)
-    time.sleep(30)  # Check every 30 seconds
+        return "✅ Code sent!"
+    else:
+        return "No new code found."
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
